@@ -30,7 +30,8 @@ class Category(models.Model):
 class Book(models.Model):
     title = models.CharField(max_length=255, db_index=True)
     description = models.TextField(blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2, db_index=True, validators=[MinValueValidator(0)])
+    price = models.DecimalField(max_digits=10, decimal_places=2, db_index=True, validators=[MinValueValidator(0)],
+                                default=0)
     publication_date = models.DateField(db_index=True)
 
     isbn = models.CharField(max_length=20, null=True, blank=True, unique=True)
