@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -127,3 +128,78 @@ def books(request):
         book.authors.set(authors)
 
     return JsonResponse(book.to_dict(), status=201)
+
+@require_http_methods(['GET', 'PUT', 'PATCH', 'DELETE'])
+def book_detail(request, book_id):
+    try:
+        book = Book.objects.select_related('creator').prefetch_related('authors', 'categories', 'favorited_by').get(pk=book_id)
+    except ObjectDoesNotExist:
+        return JsonResponse({'detail': 'Book not found.'}, status=404)
+
+    if request.method == 'GET':
+        return JsonResponse(book.to_dict(), status=200)
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication required.'}, status=401)
+
+    if not (request.user.is_staff or book.creator_id == request.user.id):
+        return JsonResponse({'detail': 'You do not have permission to modify this book.'}, status=403)
+
+    if request.method == 'DELETE':
+        book.delete()
+        return JsonResponse({'detail': 'Book deleted successfully.'}, status=204)
+
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        return JsonResponse({'detail': 'Invalid JSON body.'}, status=400)
+
+    if 'title' in data:
+        book.title = data['title']
+
+    if 'description' in data:
+        book.description = data['description'] or ''
+
+    if 'price' in data:
+        try:
+            price = Decimal(str(data['price']))
+            if price < 0:
+                return JsonResponse({'detail': 'price must be >= 0.'}, status=400)
+            book.price = price
+        except (InvalidOperation, TypeError):
+            return JsonResponse({'detail': 'price must be a number.'}, status=400)
+
+    if 'publication_date' in data:
+        try:
+            book.publication_date = datetime.strptime(data['publication_date'], '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'detail': 'publication_date must be YYYY-MM-DD.'}, status=400)
+
+    if 'isbn' in data:
+        new_isbn = data['isbn']
+        if new_isbn:
+            if Book.objects.filter(isbn=new_isbn).exclude(pk=book.id).exists():
+                return JsonResponse({'detail': 'ISBN already exists.'}, status=400)
+            book.isbn = new_isbn
+        else:
+            book.isbn = None
+
+    if 'authors' in data:
+        ids = list(data.get('authors') or [])
+        if not ids:
+            return JsonResponse({'detail': 'At least one author is required.'}, status=400)
+        authors = list(Author.objects.filter(id__in=ids))
+        if len(authors) != len(set(ids)):
+            return JsonResponse({'detail': 'One or more authors not found.'}, status=400)
+        set_authors_after_save = authors
+    else:
+        set_authors_after_save = None
+
+
+    book.save()
+
+    if set_authors_after_save is not None:
+        book.authors.set(set_authors_after_save)
+
+    book = Book.objects.select_related('creator').prefetch_related('authors', 'categories', 'favorited_by').get(pk=book_id)
+    return JsonResponse(book.to_dict(), status=200)
