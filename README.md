@@ -13,7 +13,7 @@ A simple **Django** web app for managing a small library system.
 ---
 
 ## 🗺️ ERD
-![Library ERD](docs/erd/libra-django.svg)
+![Library ERD](docs/erd.svg)
 
 ---
 

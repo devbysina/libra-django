@@ -15,13 +15,15 @@ class Author(models.Model):
 
 
 class Category(models.Model):
-    name = models.CharField(max_length=120, unique=True)
-    slug = models.SlugField(max_length=140, unique=True)
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=140)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='categories')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name_plural = "Categories"
+        verbose_name_plural = 'Categories'
+        unique_together = (('owner', 'slug'), ('owner', 'name'))
 
     def __str__(self):
         return self.name
@@ -36,23 +38,39 @@ class Book(models.Model):
 
     isbn = models.CharField(max_length=20, null=True, blank=True, unique=True)
 
-    authors = models.ManyToManyField(Author, related_name="books")
-    categories = models.ManyToManyField(Category, related_name="books", blank=True)
+    authors = models.ManyToManyField(Author, related_name='books')
+    categories = models.ManyToManyField(Category, related_name='books', blank=True)
 
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="created_books"
+        related_name='created_books'
     )
 
     favorited_by = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        related_name="favorite_books",
+        related_name='favorite_books',
         blank=True
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'price': str(self.price),
+            'publication_date': self.publication_date.isoformat(),
+            'isbn': self.isbn,
+            'authors': [str(author) for author in self.authors.all()],
+            'categories': [str(category) for category in self.categories.all()],
+            'creator': str(self.creator),
+            'favorited_by': [str(user) for user in self.favorited_by.all()],
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+        }
 
     def __str__(self):
         return self.title
